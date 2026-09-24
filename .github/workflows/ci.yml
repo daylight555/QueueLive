@@ -1,0 +1,59 @@
+name: QueueLive CI
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+          cache-dependency-path: backend/pom.xml
+      - name: Real PostgreSQL integration tests (Testcontainers)
+        working-directory: backend
+        run: ./mvnw -B -ntp verify
+  browser:
+    runs-on: ubuntu-latest
+    env:
+      DEMO_STAFF_PASSWORD: ci-disposable-password-123
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.13.1'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Prepare disposable environment
+        run: |
+          cat > .env <<'ENV'
+          DATABASE_PASSWORD=ci-disposable-db-password
+          DEMO_ENABLED=true
+          DEMO_STAFF_PASSWORD=ci-disposable-password-123
+          PUBLIC_BASE_URL=http://localhost:8080
+          COOKIE_SECURE=false
+          ENV
+      - run: docker compose up --build -d
+      - name: Wait for database-backed API
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://localhost:8080/api/public > /dev/null; then exit 0; fi
+            sleep 2
+          done
+          docker compose logs
+          exit 1
+      - run: npm ci && npm run build && npx playwright install --with-deps chromium
+        working-directory: frontend
+      - run: npm run test:e2e
+        working-directory: frontend
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-failure-report
+          path: frontend/playwright-report
+          retention-days: 3
+      - run: docker compose logs && docker compose down
+        if: always()

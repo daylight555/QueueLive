@@ -1,0 +1,27 @@
+spring:
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/queuelive}
+    username: ${DATABASE_USER:queuelive}
+    password: ${DATABASE_PASSWORD}
+  session:
+    timeout: 7d
+    jdbc:
+      initialize-schema: never
+  jackson:
+    time-zone: UTC
+server:
+  port: 8080
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        secure: ${COOKIE_SECURE:true}
+        same-site: lax
+  error:
+    include-message: never
+    include-stacktrace: never
+queuelive:
+  public-base-url: ${PUBLIC_BASE_URL}
+  demo:
+    enabled: ${DEMO_ENABLED:false}
+    password: ${DEMO_STAFF_PASSWORD:}
